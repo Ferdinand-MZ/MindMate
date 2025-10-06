@@ -7,12 +7,34 @@ import { Mail, User, Lock } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import Link from 'next/link'
+import { registerUser } from "@/lib/api/auth"
+import {useRouter} from 'next/navigation'
 
 export default function LoginPage() {
+    const router = useRouter()
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
     const [name, setName] = useState("")
     const [confirmPassword, setConfirmPassword] = useState("")
+    const [error, SetError] = useState("")
+    const [loading, setLoading] = useState(false)
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault() // prevent pagenya refresh abis submit
+        SetError("")
+        if(password !== confirmPassword) {
+            SetError("Password dan Konfirmasi Password tidak sesuai")
+            return;
+        }
+        setLoading(true)
+        try {
+            await registerUser(name, email, password):
+            router.push("/login")
+        } catch (err: any) {
+            setError(err.message || "Gagal Mendaftar. Coba lagi nanti.")
+        } finally {
+            setLoading(false)
+        }
+    }
 
     return (
         <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-primary/10 
@@ -31,7 +53,7 @@ export default function LoginPage() {
                     </div>
 
                     {/* Form */}
-                    <form action="" className="space-y-6">
+                    <form action="" className="space-y-6" onSubmit={handleSubmit}>
                         <div className="space-y-3">
                             <div className="flex flex-col md:flex-row gap-4">
                                 <div className="flex-1">
@@ -111,15 +133,18 @@ export default function LoginPage() {
 
                             
                         </div>
-
+                            {error && (
+                                <p className="text-red-500 text-sm text-center">{error}</p>
+                            )}
                             {/* Button */}
                             <Button
                             className="w-full py-2 text-base rounded-xl font-bold bg-gradient-to-r from-primary
                             to-primary/80 shadow-md hover:from-primary/80 hover:to-primary"
                             size="lg"
-                            type="button"
+                            type="submit"
+                            disabled={loading}
                             >
-                                Daftar
+                                {loading ? 'Mendaftarkan...' : 'Daftar'}
                             </Button>
 
                         <div className="flex items-center justify-center gap-2 text-sm">

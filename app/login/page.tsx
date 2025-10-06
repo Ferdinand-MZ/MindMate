@@ -7,10 +7,38 @@ import { Mail, Lock } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import Link from 'next/link'
+import {useRouter} from 'next/navigation'
+import { useSession } from "@/lib/contexts/session-context"
+import { loginUser } from "@/lib/api/auth"
 
 export default function LoginPage() {
+    const router = useRouter()
+    const {checkSession} = useSession();
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
+    const [error, setError] = useState("")
+    const [loading, setLoading] = useState(false)
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault() // prevent pagenya refresh abis submit
+        setError("")
+        setLoading(true)
+        try {
+            const response = await loginUser(email, password);
+
+            localStorage.setItem("token", response.token);
+
+            await checkSession()
+
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            router.push("/dashboard")
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Email atau password invalid. Coba lagi nanti.")
+        } finally {
+            setLoading(false)
+        }
+    }
 
     return (
         <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-primary/10 
@@ -31,7 +59,7 @@ export default function LoginPage() {
                     </div>
 
                     {/* Form */}
-                    <form action="" className="space-y-6">
+                    <form action="" className="space-y-6" onSubmit={handleSubmit}>
                         <div className="space-y-3">
                             <div>
                                 {/* email */}
@@ -71,15 +99,19 @@ export default function LoginPage() {
 
                             
                         </div>
+                            {error && (
+                                <p className="text-red-500 text-sm text-center font-medium">{error}</p>
+                            )}
 
                             {/* Button */}
                             <Button
                             className="w-full py-2 text-base rounded-xl font-bold bg-gradient-to-r from-primary
                             to-primary/80 shadow-md hover:from-primary/80 hover:to-primary"
                             size="lg"
-                            type="button"
+                            type="submit"
+                            disabled={loading}
                             >
-                                Masuk
+                                {loading ? 'Memproses...' : 'Masuk'}
                             </Button>
 
                         <div className="flex items-center justify-center gap-2 text-sm">

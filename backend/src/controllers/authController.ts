@@ -74,7 +74,7 @@ export const login = async (req: Request, res: Response) => {
     expiresAt.setHours(expiresAt.getHours() + 24); // Sesi berlaku selama 24 jam
 
     const session = new Session({
-        userID : user._id,
+        userId : user._id,
         token,
         expiresAt,
         deviceInfo: req.headers['user-agent'],

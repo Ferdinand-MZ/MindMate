@@ -1,11 +1,20 @@
 "use client"
+import React from 'react';
 import { useState, useEffect } from 'react';
 import { Ripple } from '@/components/magicui/ripple';
 import {motion } from 'framer-motion';
-import { Waves, ArrowRight, HeartPulse, Lightbulb, Lock, MessageSquareHeart } from 'lucide-react';
+import { Waves, ArrowRight, HeartPulse, Lightbulb, Lock,Brain, Shield, MessageSquareHeart, Sparkles } from 'lucide-react';
 import { Slider } from "@/components/ui/slider"
 import { Button } from '@/components/ui/button';
 import  {Card, CardHeader, CardContent} from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
   const emotions = [
@@ -16,8 +25,33 @@ export default function Home() {
     {value: 100, label: "😆 Gembira", color: "from-pink-500/50"},
   ];
 
+  const router = useRouter();
   const [emotion, setEmotion] = useState(50)
   const [mounted, setMounted] = useState(false)
+  const [showDialog, setShowDialog] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+
+  const welcomeSteps = [
+  {
+    title: "Hai, aku MindMate 👋",
+    description:
+      "Teman AI kamu untuk menjaga kesejahteraan emosional. Aku hadir untuk memberikan ruang aman tanpa penilaian agar kamu bisa mengekspresikan diri.",
+    icon: Waves,
+  },
+  {
+    title: "Dukungan yang Dipersonalisasi 🌱",
+    description:
+      "Aku menyesuaikan diri dengan kebutuhan dan kondisi emosimu, menawarkan teknik berbasis bukti serta panduan lembut saat kamu membutuhkannya.",
+    icon: Brain,
+  },
+  {
+    title: "Privasimu Penting 🛡️",
+    description:
+      "Percakapan kita sepenuhnya bersifat pribadi dan aman. Aku mengikuti pedoman etika yang ketat dan menghormati batasanmu.",
+    icon: Shield,
+  },
+
+  ];
 
   useEffect(() => {
     setMounted(true)
@@ -168,6 +202,7 @@ export default function Home() {
           >
             <Button
               size="lg"
+              onClick={() => setShowDialog(true)}
               className="relative group h-12 px-8 rounded-full bg-gradient-to-r from-primary via-primary/90 to-secondary
               hover:to-primary shadow-lg shadow-primary/20 transition-all duration-500 hover:shadow-xl hover:shadow-primary/30"
             >
@@ -192,6 +227,7 @@ export default function Home() {
               Rasakan pengalaman bantuan mental dari AI
             </p>
           </motion.div>
+
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative'>
             {features.map((feature, index) => (
               <motion.div
@@ -231,6 +267,79 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="sm:max-w-[425px] bg-card/80 backdrop-blur-lg">
+          <DialogHeader>
+            <motion.div
+              key={currentStep}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-4"
+            >
+              <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                {welcomeSteps[currentStep] && (
+                  <div>
+                    {React.createElement(welcomeSteps[currentStep].icon, {
+                      className: "w-8 h-8 text-primary",
+                    })}
+                  </div>
+                )}
+              </div>
+              <DialogTitle className="text-2xl text-center">
+                {welcomeSteps[currentStep]?.title}
+              </DialogTitle>
+              <DialogDescription className="text-center text-base leading-relaxed">
+                {welcomeSteps[currentStep]?.description}
+              </DialogDescription>
+            </motion.div>
+          </DialogHeader>
+          <div className="flex justify-between items-center mt-8">
+            <div className="flex gap-2">
+              {welcomeSteps.map((_, index) => (
+                <div
+                  key={index}
+                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                    index === currentStep ? "bg-primary w-4" : "bg-primary/20"
+                  }`}
+                />
+              ))}
+            </div>
+
+            <Button
+              onClick={() => {
+                if (currentStep < welcomeSteps.length - 1) {
+                  setCurrentStep((c) => c + 1);
+                } else {
+                  setShowDialog(false);
+                  setCurrentStep(0);
+                  // Here you would navigate to the chat interface
+                  router.push("/login");
+                }
+              }}
+              className="relative group px-6"
+            >
+              <span className="flex items-center gap-2">
+                {currentStep === welcomeSteps.length - 1 ? (
+                  <>
+                    Mari Mulai
+                    <Sparkles className="w-4 h-4 animate-pulse" />
+                  </>
+                ) : (
+                  <>
+                    Selanjutnya
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
+                  </>
+                )}
+              </span>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
   )
 }

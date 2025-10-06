@@ -7,9 +7,10 @@ import { Card, CardContent, CardDescription, CardTitle, CardHeader } from "@/com
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import { BreathingGame } from "./breathing-games";
+import { BreathingGame } from "./breathing-game";
 import { ZenGarden } from "./zen-garden";
 import { ForestGame } from "./forest-game";
+import { OceanWaves } from "./ocean-waves";
 
 
 const games = [
@@ -85,7 +86,7 @@ export const AnxietyGames = ({ onGamePlayed }:
                 case "forest":
                     return <ForestGame/>
                 case "waves":
-                    // return
+                    return <OceanWaves/>
                 default:
                     return null
             }

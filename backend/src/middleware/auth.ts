@@ -34,3 +34,4 @@ export const auth = async (req: Request, res: Response, next: NextFunction) => {
     } catch (error) {
         res.status(401).json({message: "Token tidak valid!"})
     }
+}
