@@ -27,7 +27,7 @@ export default function LoginPage() {
         }
         setLoading(true)
         try {
-            await registerUser(name, email, password):
+            await registerUser(name, email, password)
             router.push("/login")
         } catch (err: any) {
             setError(err.message || "Gagal Mendaftar. Coba lagi nanti.")

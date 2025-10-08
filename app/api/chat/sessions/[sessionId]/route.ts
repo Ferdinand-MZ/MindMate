@@ -4,14 +4,38 @@ const BACKEND_API_URL =
   process.env.API_URL ||
   "http://localhost:3001";
 
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { sessionId: string } }
+) {
+  try {
+    const { sessionId } = params;
+    const response = await fetch(
+      `${BACKEND_API_URL}/chat/sessions/${sessionId}/history`
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Error in chat history API:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch chat history" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { sessionId: string } }
 ) {
   try {
     const { sessionId } = params;
-    const body = await req.json();
-    const { message } = body;
+    const { message } = await req.json();
 
     if (!message) {
       return NextResponse.json(
@@ -20,7 +44,6 @@ export async function POST(
       );
     }
 
-    console.log(`Sending message to session ${sessionId}:`, message);
     const response = await fetch(
       `${BACKEND_API_URL}/chat/sessions/${sessionId}/messages`,
       {
@@ -33,21 +56,15 @@ export async function POST(
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      console.error("Failed to send message:", error);
-      return NextResponse.json(
-        { error: error.error || "Failed to send message" },
-        { status: response.status }
-      );
+      throw new Error(`HTTP error! Status: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log("Message sent successfully:", data);
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Error sending message:", error);
+    console.error("Error in chat API:", error);
     return NextResponse.json(
-      { error: "Failed to send message" },
+      { error: "Failed to process chat message" },
       { status: 500 }
     );
   }

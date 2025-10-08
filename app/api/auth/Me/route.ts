@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
-  const API_URL = process.env.BACKEND_API_URL || "localhost:3001";
+  const API_URL = process.env.API_URL || "http://localhost:3001";
   const token = req.headers.get("Authorization");
 
   if (!token) {
-    return NextResponse.json({ message: "Tidak ada token yang diberikan " }, { status: 401 });
+    return NextResponse.json({ message: "No token provided" }, { status: 401 });
   }
 
   try {

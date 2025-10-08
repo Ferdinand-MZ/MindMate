@@ -41,7 +41,7 @@ export interface ApiResponse {
 }
 
 const API_BASE =
-  process.env.BACKEND_API_URL ||"http://localhost:3001";
+  process.env.API_URL ||"http://localhost:3001";
 
 // Fungsi helper untuk mendapatkan header dengan token autentikasi (auth Header)
 const getAuthHeaders = () => {
