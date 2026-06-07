@@ -1,4 +1,3 @@
-<div align="center">
 
 # 🧠 MindMate
 
@@ -35,6 +34,12 @@ MindMate adalah aplikasi web kesehatan mental yang dirancang khusus untuk remaja
 | 💡 **CBT Insights** | Form refleksi berbasis Cognitive Behavioral Therapy |
 | 🚨 **Crisis Modal** | Deteksi konten krisis real-time → redirect ke 119 ext 8 |
 | 📈 **Progress Report** | Laporan bulanan otomatis dari data mood + aktivitas |
+
+---
+
+## System Architecture
+
+<img width="142" height="150" alt="mindmate_system_architecture" src="https://github.com/user-attachments/assets/ddff8755-8a22-4374-869b-049788b143d1" />
 
 ---
 
