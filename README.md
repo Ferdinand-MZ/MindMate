@@ -39,7 +39,7 @@ MindMate adalah aplikasi web kesehatan mental yang dirancang khusus untuk remaja
 
 ## System Architecture
 
-<img width="142" height="150" alt="mindmate_system_architecture" src="https://github.com/user-attachments/assets/ddff8755-8a22-4374-869b-049788b143d1" />
+<img width="800" alt="MindMate System Architecture" src="https://github.com/user-attachments/assets/ddff8755-8a22-4374-869b-049788b143d1" />
 
 ---
 
@@ -295,4 +295,4 @@ MIT License — lihat [LICENSE](./LICENSE) untuk detail.
 <div align="center">
   <sub>Dibuat dengan ❤️ untuk kesehatan mental generasi muda Indonesia</sub><br/>
   <sub>Jika kamu dalam krisis, hubungi <strong>Into The Light Indonesia: 119 ext 8</strong> (24 jam)</sub>
-</div><img width="142" height="150" alt="mindmate_system_architecture" src="https://github.com/user-attachments/assets/e0d54b00-f03f-4b48-ac00-f75057331737" />
+</div>
