@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { setAuthCookie, clearAuthCookie } from "@/lib/auth-cookie";
 
 interface User {
   _id: string;
@@ -27,10 +28,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const checkSession = async () => {
     try {
       const token = localStorage.getItem("token");
-      console.log(
-        "SessionContext: Token from localStorage:",
-        token ? "exists" : "not found"
-      );
 
       if (!token) {
         setUser(null);
@@ -38,31 +35,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      console.log("SessionContext: Fetching user data...");
       const response = await fetch("/api/auth/me", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      console.log("SessionContext: Response status:", response.status);
 
       if (response.ok) {
         const data = await response.json();
-        console.log("SessionContext: User data received:", data);
-        const userData = data.user;
-        const { password, ...safeUserData } = userData;
+        const { password, ...safeUserData } = data.user;
         setUser(safeUserData);
-        console.log("SessionContext: User state updated:", safeUserData);
+        // Keep cookie in sync — e.g. after a page refresh
+        setAuthCookie(token);
       } else {
-        console.log("SessionContext: Failed to get user data");
         setUser(null);
         localStorage.removeItem("token");
+        clearAuthCookie();
       }
-    } catch (error) {
-      console.error("SessionContext: Error checking session:", error);
+    } catch {
       setUser(null);
       localStorage.removeItem("token");
+      clearAuthCookie();
     } finally {
       setLoading(false);
     }
@@ -74,22 +65,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (token) {
         await fetch("/api/auth/logout", {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
       }
-    } catch (error) {
-      console.error("Logout error:", error);
+    } catch {
+      // silent
     } finally {
       localStorage.removeItem("token");
+      clearAuthCookie();          // ← hapus cookie supaya middleware ikut tahu
       setUser(null);
       router.push("/");
     }
   };
 
   useEffect(() => {
-    console.log("SessionContext: Initial check");
     checkSession();
   }, []);
 

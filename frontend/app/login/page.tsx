@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { loginUser } from "@/lib/api/auth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,9 +10,11 @@ import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Lock, Mail } from "lucide-react";
 import { useSession } from "@/lib/contexts/session-context";
+import { setAuthCookie } from "@/lib/auth-cookie";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { checkSession } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,15 +28,17 @@ export default function LoginPage() {
     try {
       const response = await loginUser(email, password);
 
-      // Store the token in localStorage
+      // Store token in localStorage (for API calls)
       localStorage.setItem("token", response.token);
+      // Sync to cookie so Next.js middleware can read it server-side
+      setAuthCookie(response.token);
 
-      // Update session state
       await checkSession();
-
-      // Wait for state to update before redirecting
       await new Promise((resolve) => setTimeout(resolve, 100));
-      router.push("/dashboard");
+
+      // Redirect back to original destination if present
+      const redirect = searchParams.get("redirect") || "/dashboard";
+      router.push(redirect);
     } catch (err) {
       setError(
         err instanceof Error
@@ -61,10 +65,7 @@ export default function LoginPage() {
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-3">
               <div>
-                <label
-                  htmlFor="email"
-                  className="block text-base font-semibold mb-1"
-                >
+                <label htmlFor="email" className="block text-base font-semibold mb-1">
                   Email
                 </label>
                 <div className="relative">
@@ -81,10 +82,7 @@ export default function LoginPage() {
                 </div>
               </div>
               <div>
-                <label
-                  htmlFor="password"
-                  className="block text-base font-semibold mb-1"
-                >
+                <label htmlFor="password" className="block text-base font-semibold mb-1">
                   Kata Sandi
                 </label>
                 <div className="relative">
@@ -102,9 +100,7 @@ export default function LoginPage() {
               </div>
             </div>
             {error && (
-              <p className="text-red-500 text-base text-center font-medium">
-                {error}
-              </p>
+              <p className="text-red-500 text-base text-center font-medium">{error}</p>
             )}
             <Button
               className="w-full py-2 text-base rounded-xl font-bold bg-gradient-to-r from-primary to-primary/80 shadow-md hover:from-primary/80 hover:to-primary"
@@ -118,9 +114,7 @@ export default function LoginPage() {
           <div className="my-6 border-t border-primary/10" />
           <div className="flex flex-col items-center gap-2">
             <div className="flex items-center justify-center gap-2 text-sm">
-              <span className="text-muted-foreground">
-                Belum punya akun?
-              </span>
+              <span className="text-muted-foreground">Belum punya akun?</span>
               <Link
                 href="/signup"
                 className="text-primary font-semibold underline hover:text-primary/80 transition-colors"

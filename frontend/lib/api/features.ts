@@ -35,6 +35,16 @@ export async function getJournalHistory(params?: { limit?: number }) {
   return res.json();
 }
 
+export async function analyzeJournalEntry(journalId: string) {
+  const res = await fetch("/api/journal/analyze", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ journalId }),
+  });
+  if (!res.ok) throw new Error("Failed to analyze journal entry");
+  return res.json();
+}
+
 // ─── Community Board ──────────────────────────────────────────────────────────
 export async function getCommunityPosts(page = 1) {
   const res = await fetch(`/api/community/posts?page=${page}`, {
@@ -52,7 +62,6 @@ export async function createCommunityPost(content: string) {
   });
   if (!res.ok) {
     const err = await res.json();
-    // Surface crisis flag so the UI can style it differently
     if (err.blocked && err.crisis) {
       const crisisErr: any = new Error(err.message || "Content blocked");
       crisisErr.isCrisis = true;

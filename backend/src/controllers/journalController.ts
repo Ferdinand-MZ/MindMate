@@ -37,7 +37,6 @@ export const getDailyPrompt = async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    // Gather recent mood data (last 7 days)
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -48,7 +47,6 @@ export const getDailyPrompt = async (req: Request, res: Response) => {
       .sort({ timestamp: -1 })
       .limit(10);
 
-    // Gather recent chat themes
     const recentSessions = await ChatSession.find({ userId })
       .sort({ startTime: -1 })
       .limit(3)
@@ -78,7 +76,6 @@ export const getDailyPrompt = async (req: Request, res: Response) => {
         ? "mixed"
         : "positive";
 
-    // Check if already has prompt today
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const existingToday = await Journal.findOne({
@@ -182,5 +179,83 @@ export const getJournalHistory = async (req: Request, res: Response) => {
   } catch (error) {
     logger.error("Error fetching journal history:", error);
     res.status(500).json({ message: "Error fetching journals" });
+  }
+};
+
+// ─── Analyze journal entry with AI (opt-in) ───────────────────────────────────
+export const analyzeJournalEntry = async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { journalId } = req.body;
+    if (!journalId) {
+      return res.status(400).json({ message: "journalId is required" });
+    }
+
+    const journal = await Journal.findOne({ _id: journalId, userId });
+    if (!journal) {
+      return res.status(404).json({ message: "Journal entry not found" });
+    }
+
+    if (!journal.content?.trim()) {
+      return res.status(400).json({ message: "Journal has no content to analyze" });
+    }
+
+    // Return cached analysis if already done
+    if (journal.aiAnalysis) {
+      return res.json({ success: true, analysis: journal.aiAnalysis });
+    }
+
+    const analysisPrompt = `You are MindMate, a compassionate mental wellness AI for Indonesian teenagers and college students.
+
+Analyze this journal entry and respond ONLY with a valid JSON object (no markdown, no extra text):
+
+Journal prompt: "${journal.prompt}"
+Journal entry: "${journal.content}"
+
+Respond with this exact JSON structure:
+{
+  "mood": "satu kata emosi dominan dalam bahasa Indonesia (misal: tenang, cemas, bersyukur, sedih, semangat)",
+  "moodEmoji": "satu emoji yang cocok dengan mood",
+  "themes": ["tema1", "tema2"],
+  "insight": "2-3 kalimat hangat dan empatik tentang apa yang terlihat dari tulisan ini — bukan saran, tapi refleksi",
+  "affirmation": "satu kalimat afirmasi singkat yang personal dan menyentuh, langsung ditujukan ke penulis"
+}
+
+Rules:
+- themes: 2-3 kata kunci (dalam bahasa Indonesia, misal: "kelelahan", "hubungan", "ekspektasi diri")
+- insight: hangat, seperti teman yang mengerti — bukan terapis. Jangan menyarankan sesuatu
+- affirmation: pendek, kuat, personal berdasarkan isi tulisan
+- Semua teks dalam bahasa Indonesia
+- Output HANYA JSON mentah, tanpa \`\`\`json atau penjelasan apapun`;
+
+    const raw = await geminiGenerate(analysisPrompt);
+
+    let analysis: {
+      mood: string;
+      moodEmoji: string;
+      themes: string[];
+      insight: string;
+      affirmation: string;
+    };
+
+    try {
+      // Strip any accidental markdown fences
+      const cleaned = raw.replace(/```json|```/g, "").trim();
+      analysis = JSON.parse(cleaned);
+    } catch {
+      logger.error("Failed to parse AI analysis JSON:", raw);
+      return res.status(500).json({ message: "Failed to parse AI analysis" });
+    }
+
+    // Cache analysis on the journal document
+    journal.aiAnalysis = analysis;
+    await journal.save();
+
+    res.json({ success: true, analysis });
+  } catch (error) {
+    logger.error("Error analyzing journal entry:", error);
+    res.status(500).json({ message: "Error analyzing entry" });
   }
 };

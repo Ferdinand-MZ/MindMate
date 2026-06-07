@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  Heart,
   Menu,
   X,
   MessageCircle,
@@ -15,15 +14,26 @@ import { ThemeToggle } from "./theme-toggle";
 import { SignInButton } from "@/components/auth/sign-in-button";
 import { useSession } from "@/lib/contexts/session-context";
 
+// Nav items visible to everyone
+const PUBLIC_NAV = [
+  { href: "/features", label: "Fitur" },
+  { href: "/about",    label: "Tentang" },
+];
+
+// Nav items only visible after login
+const PROTECTED_NAV = [
+  { href: "/wellness",   label: "Wellness" },
+  { href: "/journal",    label: "Jurnal" },
+  { href: "/community",  label: "Komunitas" },
+];
+
 export function Header() {
-  const { isAuthenticated, logout, user } = useSession();
+  const { isAuthenticated, logout } = useSession();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const navItems = [
-    { href: "/features", label: "Fitur" },
-    { href: "/wellness", label: "Wellness" },
-    { href: "/about", label: "Tentang" },
-  ];
+  const visibleNav = isAuthenticated
+    ? [...PUBLIC_NAV, ...PROTECTED_NAV]
+    : PUBLIC_NAV;
 
   return (
     <div className="w-full fixed top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -46,11 +56,11 @@ export function Header() {
             </div>
           </Link>
 
-          {/* Right Section */}
+          {/* Right section */}
           <div className="flex items-center gap-2 sm:gap-4">
-            {/* Desktop Nav */}
+            {/* Desktop nav */}
             <nav className="hidden md:flex items-center space-x-1">
-              {navItems.map((item) => (
+              {visibleNav.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
@@ -90,28 +100,24 @@ export function Header() {
                 <SignInButton />
               )}
 
-              {/* Mobile Menu Toggle */}
+              {/* Mobile menu toggle */}
               <Button
                 variant="ghost"
                 size="icon"
                 className="md:hidden"
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
               >
-                {isMenuOpen ? (
-                  <X className="h-5 w-5" />
-                ) : (
-                  <Menu className="h-5 w-5" />
-                )}
+                {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Mobile Menu */}
+        {/* Mobile menu */}
         {isMenuOpen && (
           <div className="md:hidden border-t border-primary/10 bg-background">
             <nav className="flex flex-col space-y-1 py-3 px-3">
-              {navItems.map((item) => (
+              {visibleNav.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
@@ -122,12 +128,9 @@ export function Header() {
                 </Link>
               ))}
 
-              {isAuthenticated && (
+              {isAuthenticated ? (
                 <>
-                  <Button
-                    asChild
-                    className="mt-2 w-full gap-2 bg-primary/90 hover:bg-primary"
-                  >
+                  <Button asChild className="mt-2 w-full gap-2 bg-primary/90 hover:bg-primary">
                     <Link href="/dashboard">
                       <MessageCircle className="w-4 h-4" />
                       Mulai
@@ -142,6 +145,10 @@ export function Header() {
                     Keluar
                   </Button>
                 </>
+              ) : (
+                <div className="mt-2">
+                  <SignInButton />
+                </div>
               )}
             </nav>
           </div>
