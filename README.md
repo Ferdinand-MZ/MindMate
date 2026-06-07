@@ -289,10 +289,3 @@ POST   /api/insight
 ## Lisensi
 
 MIT License — lihat [LICENSE](./LICENSE) untuk detail.
-
----
-
-<div align="center">
-  <sub>Dibuat dengan ❤️ untuk kesehatan mental generasi muda Indonesia</sub><br/>
-  <sub>Jika kamu dalam krisis, hubungi <strong>Into The Light Indonesia: 119 ext 8</strong> (24 jam)</sub>
-</div>
