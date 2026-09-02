@@ -36,7 +36,7 @@ const REACTION_CONFIG: Record<ReactionType, { emoji: string; label: string }> = 
   sparkle:  { emoji: "✨", label: "Semangat" },
 };
 
-// Pastel avatar colors — deterministic from anonId character sum
+// Pastel avatar colors : deterministic from anonId character sum
 const AVATAR_PALETTES = [
   "from-violet-400 to-purple-500",
   "from-pink-400 to-rose-400",
@@ -47,7 +47,7 @@ const AVATAR_PALETTES = [
 ];
 
 interface Post {
-  _id: string;
+  id: string;
   content: string;
   reactions: Record<ReactionType, number>;
   createdAt: string;
@@ -86,7 +86,7 @@ function PostCard({
   const [reactedWith, setReactedWith] = useState<Set<ReactionType>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const palette = avatarPalette(post._id);
+  const palette = avatarPalette(post.id);
 
   const handleReact = async (r: ReactionType) => {
     if (reacting || reactedWith.has(r)) return;
@@ -94,7 +94,7 @@ function PostCard({
     setLocalReactions((prev) => ({ ...prev, [r]: (prev[r] || 0) + 1 }));
     setReactedWith((prev) => new Set([...prev, r]));
     try {
-      await onReact(post._id, r);
+      await onReact(post.id, r);
     } catch {
       setLocalReactions({ ...post.reactions });
       setReactedWith((prev) => { const n = new Set(prev); n.delete(r); return n; });
@@ -157,7 +157,7 @@ function PostCard({
                 <Button
                   size="sm"
                   className="h-6 px-2 text-xs bg-destructive hover:bg-destructive/90 text-white"
-                  onClick={() => onDelete(post._id)}
+                  onClick={() => onDelete(post.id)}
                 >
                   Hapus
                 </Button>
@@ -265,7 +265,7 @@ function ComposeModal({
           <div className="flex items-start gap-2.5 bg-muted/50 rounded-xl p-3">
             <Shield className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Postingan ini <strong>100% anonim</strong>. Tidak ada nama, foto, atau identitas yang terkait. Tidak ada komentar — hanya reaksi dukungan.
+              Postingan ini <strong>100% anonim</strong>. Tidak ada nama, foto, atau identitas yang terkait. Tidak ada komentar : hanya reaksi dukungan.
             </p>
           </div>
 
@@ -372,7 +372,7 @@ export default function CommunityPage() {
   const handleDelete = async (id: string) => {
     try {
       await deleteCommunityPost(id);
-      setPosts((prev) => prev.filter((p) => p._id !== id));
+      setPosts((prev) => prev.filter((p) => p.id !== id));
       setPostCount((c) => Math.max(0, c - 1));
     } catch { /* silent */ }
   };
@@ -436,11 +436,11 @@ export default function CommunityPage() {
         {/* Content */}
         <div className="pt-[7.5rem] sm:pt-[8rem] pb-16 max-w-2xl mx-auto px-4">
 
-          {/* Safety notice — sticky-ish, tipis */}
+          {/* Safety notice : sticky-ish, tipis */}
           <div className="flex items-start gap-2.5 bg-amber-500/5 border border-amber-500/15 rounded-2xl p-3.5 mb-6">
             <AlertCircle className="w-3.5 h-3.5 text-amber-500/80 shrink-0 mt-0.5" />
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Ruang ini <strong>anonim sepenuhnya</strong>. Tidak ada komentar — hanya reaksi dukungan.
+              Ruang ini <strong>anonim sepenuhnya</strong>. Tidak ada komentar : hanya reaksi dukungan.
               Jika kamu dalam krisis, hubungi <strong>119 ext 8</strong> (Into The Light, 24 jam).
             </p>
           </div>
@@ -483,7 +483,7 @@ export default function CommunityPage() {
               <AnimatePresence mode="popLayout">
                 {posts.map((post) => (
                   <PostCard
-                    key={post._id}
+                    key={post.id}
                     post={post}
                     onReact={handleReact}
                     onDelete={handleDelete}

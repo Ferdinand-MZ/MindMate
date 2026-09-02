@@ -15,7 +15,7 @@ const REACTION_EMOJI: Record<ReactionType, string> = {
 };
 
 interface Post {
-  _id: string;
+  id: string;
   content: string;
   reactions: Record<ReactionType, number>;
   createdAt: string;
@@ -59,7 +59,7 @@ export function CommunityBoard() {
       <div className="absolute inset-0 bg-gradient-to-br from-pink-500/5 via-rose-500/5 to-transparent pointer-events-none z-0" />
       <CardContent className="p-6 relative z-10 flex flex-col h-full">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 select-none">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-pink-500/10 flex items-center justify-center">
               <Users className="w-5 h-5 text-pink-500" />
@@ -90,7 +90,7 @@ export function CommunityBoard() {
                 const reacts = topReactions(post.reactions);
                 return (
                   <div
-                    key={post._id}
+                    key={post.id}
                     className="bg-muted/30 border border-border/40 rounded-xl p-3"
                   >
                     <p className="text-xs leading-relaxed text-foreground/80 line-clamp-2 mb-2">

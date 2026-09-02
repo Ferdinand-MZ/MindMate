@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND = process.env.BACKEND_API_URL || "http://localhost:3001";
 
-// POST /api/activity — log an activity
+// POST /api/activity : log an activity
 export async function POST(req: NextRequest) {
   const token = req.headers.get("Authorization");
   if (!token) {
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/activity — get activity count or list
+// GET /api/activity : get activity count or list
 // Supports ?mode=count or ?mode=all or ?mode=today
 export async function GET(req: NextRequest) {
   const token = req.headers.get("Authorization");

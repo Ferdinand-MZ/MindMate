@@ -1,6 +1,6 @@
 import express from "express";
 import { auth } from "../middleware/auth";
-import { createInsight, getUserInsights } from "../controllers/insightController";
+import { createInsightHandler, getUserInsights } from "../controllers/insightController";
 
 const router = express.Router();
 
@@ -8,7 +8,7 @@ const router = express.Router();
 router.use(auth);
 
 // Create a new insight entry
-router.post("/", createInsight);
+router.post("/", createInsightHandler);
 
 // Get user insights
 router.get("/", getUserInsights); // Changed from "/insight" to "/"

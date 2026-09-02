@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // Routes that require login
-const PROTECTED = ["/wellness", "/journal", "/community", "/dashboard"];
+const PROTECTED = ["/journal", "/community", "/dashboard"];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -12,7 +12,7 @@ export function middleware(req: NextRequest) {
 
   if (!isProtected) return NextResponse.next();
 
-  // Next.js middleware runs on the Edge — localStorage is not available.
+  // Next.js middleware runs on the Edge : localStorage is not available.
   // We rely on a cookie ("token") that is set alongside localStorage on login.
   const token = req.cookies.get("token")?.value;
 
@@ -27,5 +27,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/wellness/:path*", "/journal/:path*", "/community/:path*", "/dashboard/:path*"],
+  matcher: ["/journal/:path*", "/community/:path*", "/dashboard/:path*"],
 };

@@ -1,23 +1,11 @@
-import { Request, Response } from "express";
-import { Mood } from "../models/Mood";
-import { Activity } from "../models/Activity";
+import { Request, Response, NextFunction } from "express";
+import { getMoodsSince } from "../models/Mood";
+import { getActivitiesSince } from "../models/Activity";
 import { logger } from "../utils/logger";
-import { Types } from "mongoose";
 import { GoogleGenAI } from "@google/genai";
+import { env } from "../config/env";
 
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-
-function getUserId(req: Request): Types.ObjectId | null {
-  const user = req.user;
-  if (!user) return null;
-  const raw = user.id ?? user._id;
-  if (!raw) return null;
-  try {
-    return new Types.ObjectId(raw.toString());
-  } catch {
-    return null;
-  }
-}
+const genAI = new GoogleGenAI({ apiKey: env.geminiApiKey });
 
 const DAY_NAMES = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const HOUR_LABELS: Record<number, string> = {
@@ -25,21 +13,36 @@ const HOUR_LABELS: Record<number, string> = {
 };
 
 // ─── In-memory cache: userId → { data, cachedAt } ────────────────────────────
-// Cached per user, invalidated after 6 hours (mood patterns don't change minute-to-minute)
+// Cached per user, invalidated after 6 hours. NOTE: this is process-local :
+// it will not be shared across horizontally-scaled instances, and is only
+// intended as a single-instance dev/small-deployment optimization. A sweep
+// on every write keeps it from growing unbounded (the previous version had
+// no eviction at all, a slow memory leak over the process lifetime).
 interface CacheEntry {
   data: object;
-  cachedAt: number; // Date.now()
+  cachedAt: number;
 }
 const PATTERN_CACHE = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
+function setCache(key: string, data: object) {
+  for (const [k, v] of PATTERN_CACHE) {
+    if (Date.now() - v.cachedAt >= CACHE_TTL_MS) PATTERN_CACHE.delete(k);
+  }
+  PATTERN_CACHE.set(key, { data, cachedAt: Date.now() });
+}
+
 // GET /api/mood-patterns/weekly
-export const getWeeklyMoodPattern = async (req: Request, res: Response) => {
+export const getWeeklyMoodPattern = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const userId = getUserId(req);
+    const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const cacheKey = userId.toString();
+    const cacheKey = userId;
     const cached = PATTERN_CACHE.get(cacheKey);
     if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
       logger.info(`Mood pattern cache hit for user ${cacheKey}`);
@@ -51,9 +54,13 @@ export const getWeeklyMoodPattern = async (req: Request, res: Response) => {
     fourWeeksAgo.setDate(now.getDate() - 28);
 
     const [moods, activities] = await Promise.all([
-      Mood.find({ userId, timestamp: { $gte: fourWeeksAgo } }).sort({ timestamp: 1 }),
-      Activity.find({ userId, timestamp: { $gte: fourWeeksAgo } }).sort({ timestamp: 1 }),
+      getMoodsSince(userId, fourWeeksAgo),
+      getActivitiesSince(userId, fourWeeksAgo),
     ]);
+    // getMoodsSince/getActivitiesSince sort descending; this analysis wants
+    // ascending order.
+    moods.reverse();
+    activities.reverse();
 
     if (moods.length < 5) {
       return res.json({
@@ -145,7 +152,7 @@ export const getWeeklyMoodPattern = async (req: Request, res: Response) => {
       ? lastWeekMoods.reduce((a, m) => a + m.score, 0) / lastWeekMoods.length
       : null;
 
-    // AI narrative (inside try — never block the response)
+    // AI narrative (inside try : never block the response)
     let summary = "";
     try {
       const prompt = `Kamu adalah MindMate, asisten kesehatan mental yang hangat dan suportif untuk remaja Indonesia.
@@ -165,16 +172,16 @@ Tulis ringkasan 2-3 kalimat yang:
 3. Memberikan satu saran konkret yang bisa dicoba minggu ini
 Gunakan bahasa Indonesia yang hangat, informal, dan menyemangati. Jangan terlalu klinis.`;
 
-  const result = await genAI.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-  });
-  summary = result.text?.trim() ?? "";
+      const result = await genAI.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+      });
+      summary = result.text?.trim() ?? "";
     } catch (err) {
       logger.warn("Mood pattern AI generation failed, using fallback:", err);
       summary = worstDay
         ? `Kamu cenderung merasa kurang baik pada hari ${worstDay.name}. Coba rencanakan aktivitas menyenangkan di hari itu minggu depan! 💪`
-        : "Terus catat suasana hatimu — kami akan menemukan pola yang berguna buatmu!";
+        : "Terus catat suasana hatimu : kami akan menemukan pola yang berguna buatmu!";
     }
 
     const data = {
@@ -190,12 +197,10 @@ Gunakan bahasa Indonesia yang hangat, informal, dan menyemangati. Jangan terlalu
       generatedAt: new Date(),
     };
 
-    // Cache the result
-    PATTERN_CACHE.set(cacheKey, { data, cachedAt: Date.now() });
+    setCache(cacheKey, data);
 
     res.json({ success: true, data, cached: false });
   } catch (error) {
-    logger.error("Error generating mood patterns:", error);
-    res.status(500).json({ message: "Error generating mood patterns" });
+    next(error);
   }
 };

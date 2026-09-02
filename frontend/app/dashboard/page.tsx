@@ -26,10 +26,11 @@ import { useSession } from "@/lib/contexts/session-context";
 import { getInsightHistory } from "@/lib/api/insight";
 import { StreakCounter } from "@/components/streak/streak-counter";
 import { MoodPatternInsights } from "@/components/mood/mood-pattern-insights";
+import { ProgressReport } from "@/components/wellness/progress-report";
 
 // Type definitions
 interface Insight {
-  _id: string;
+  id: string;
   userId: string;
   name: string;
   description: string;
@@ -70,7 +71,7 @@ export default function Dashboard() {
   const [isQuizOpen, setIsQuizOpen] = useState(false);
 
   // Cache key for localStorage
-  const INSIGHTS_CACHE_KEY = `insights_${user?._id || 'anonymous'}`;
+  const INSIGHTS_CACHE_KEY = `insights_${user?.id || 'anonymous'}`;
 
   // Fetch CBT insights with caching
   const loadCBTInsights = useCallback(async () => {
@@ -126,10 +127,10 @@ export default function Dashboard() {
   }, [loadWeather, INSIGHTS_CACHE_KEY]);
 
   useEffect(() => {
-    if (user?._id) {
+    if (user?.id) {
       loadCBTInsights();
     }
-  }, [user?._id, loadCBTInsights]);
+  }, [user?.id, loadCBTInsights]);
 
   const handleStartTherapy = () => {
     router.push("/therapy/new");
@@ -265,15 +266,15 @@ export default function Dashboard() {
                     <Button
                       variant="outline"
                       className="flex flex-col h-[120px] px-4 py-3 justify-center items-center text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-500/50"
-                      onClick={() => router.push("/wellness")}
+                      onClick={() => router.push("/journal")}
                     >
                       <div className="w-10 h-10 rounded-full bg-violet-500/10 flex items-center justify-center mb-2">
                         <Heart className="w-5 h-5 text-violet-500" />
                       </div>
                       <div>
-                        <div className="font-medium text-sm">Wellness Hub</div>
+                        <div className="font-medium text-sm">Jurnal Harian</div>
                         <div className="text-xs text-muted-foreground mt-0.5">
-                          Jurnal, napas & komunitas
+                          Tulis refleksi hari ini
                         </div>
                       </div>
                     </Button>
@@ -282,8 +283,12 @@ export default function Dashboard() {
               </CardContent>
             </Card>
             {/* Insight Card: Tengah dan Kanan (col-start-2 col-span-2) */}
-            <div className="col-start-1 lg:col-start-2 lg:col-span-2">
+            <div className="col-start-1 lg:col-start-2 lg:col-span-2 space-y-4">
               <InsightCard insights={insights} />
+              {/* Moved here from the now-removed /wellness page — sits
+                  directly under Insights since it's the natural next thing
+                  to check after seeing your CBT insights. */}
+              <ProgressReport />
             </div>
           </div>
           {/* Content Grid */}

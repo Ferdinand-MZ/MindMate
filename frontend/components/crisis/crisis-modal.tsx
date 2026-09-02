@@ -53,7 +53,7 @@ const GROUNDING_STEPS = [
     count: 2,
     sense: "Cium",
     emoji: "👃",
-    instruction: "Identifikasi 2 hal yang bisa kamu CIUM — makanan, udara, atau aroma sekitar.",
+    instruction: "Identifikasi 2 hal yang bisa kamu CIUM : makanan, udara, atau aroma sekitar.",
     color: "from-orange-500/20 to-orange-600/10",
     accent: "text-orange-500",
   },
@@ -190,7 +190,7 @@ function BreathingTab() {
 
       {isActive && (
         <p className="text-xs text-muted-foreground">
-          Siklus ke-{cycles + 1} — target 4 siklus
+          Siklus ke-{cycles + 1} : target 4 siklus
         </p>
       )}
 
@@ -330,19 +330,16 @@ export function CrisisModal({ open, onClose }: CrisisModalProps) {
       <DialogContent className="max-w-sm p-0 gap-0 overflow-hidden rounded-2xl">
         {/* Header */}
         <div className="bg-gradient-to-r from-rose-500/10 via-primary/10 to-purple-500/10 p-5 pb-4 border-b border-border/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-rose-500/10 flex items-center justify-center">
-                <Shield className="w-5 h-5 text-rose-500" />
-              </div>
-              <div>
-                <h2 className="font-bold text-base text-foreground">Bantuan Segera</h2>
-                <p className="text-xs text-muted-foreground">Kamu tidak sendirian 💙</p>
-              </div>
+          {/* No custom close button here : DialogContent already renders one
+              (top-right ✕); adding a second one produced a double ✕. */}
+          <div className="flex items-center gap-2.5 pr-8">
+            <div className="w-9 h-9 rounded-full bg-rose-500/10 flex items-center justify-center">
+              <Shield className="w-5 h-5 text-rose-500" />
             </div>
-            <Button variant="ghost" size="icon" onClick={onClose} className="w-8 h-8 rounded-full">
-              <X className="w-4 h-4" />
-            </Button>
+            <div>
+              <h2 className="font-bold text-base text-foreground">Bantuan Segera</h2>
+              <p className="text-xs text-muted-foreground">Kamu tidak sendirian 💙</p>
+            </div>
           </div>
         </div>
 

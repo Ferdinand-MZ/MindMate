@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { setAuthCookie, clearAuthCookie } from "@/lib/auth-cookie";
 
 interface User {
-  _id: string;
+  id: string;
   name: string;
   email: string;
 }
@@ -43,7 +43,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         const data = await response.json();
         const { password, ...safeUserData } = data.user;
         setUser(safeUserData);
-        // Keep cookie in sync — e.g. after a page refresh
+        // Keep cookie in sync : e.g. after a page refresh
         setAuthCookie(token);
       } else {
         setUser(null);

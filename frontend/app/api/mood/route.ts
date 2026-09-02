@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND = process.env.BACKEND_API_URL || "http://localhost:3001";
 
-// POST /api/mood — log a mood entry
+// POST /api/mood : log a mood entry
 export async function POST(req: NextRequest) {
   const token = req.headers.get("Authorization");
 
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/mood — fetch mood history
+// GET /api/mood : fetch mood history
 export async function GET(req: NextRequest) {
   const token = req.headers.get("Authorization");
 

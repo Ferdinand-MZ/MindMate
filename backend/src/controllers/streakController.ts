@@ -1,21 +1,12 @@
-import { Request, Response } from "express";
-import { Streak } from "../models/Streak";
-import { Mood } from "../models/Mood";
-import { Activity } from "../models/Activity";
+import { Request, Response, NextFunction } from "express";
+import {
+  getOrCreateStreak,
+  resetCurrentStreak,
+  recordCheckIn as recordCheckInRow,
+} from "../models/Streak";
+import { findMoodInRange } from "../models/Mood";
+import { findActivityInRange } from "../models/Activity";
 import { logger } from "../utils/logger";
-import { Types } from "mongoose";
-
-function getUserId(req: Request): Types.ObjectId | null {
-  const user = req.user;
-  if (!user) return null;
-  const raw = user.id ?? user._id;
-  if (!raw) return null;
-  try {
-    return new Types.ObjectId(raw.toString());
-  } catch {
-    return null;
-  }
-}
 
 // Compare calendar dates only (ignores time-of-day entirely)
 function isSameDay(a: Date, b: Date): boolean {
@@ -34,21 +25,16 @@ function isYesterday(date: Date, today: Date): boolean {
 }
 
 // GET /api/streak
-export const getStreak = async (req: Request, res: Response) => {
+export const getStreak = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const userId = getUserId(req);
+    const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    let streak = await Streak.findOne({ userId });
-    if (!streak) {
-      streak = await Streak.create({
-        userId,
-        currentStreak: 0,
-        longestStreak: 0,
-        lastCheckInDate: null,
-        totalCheckIns: 0,
-      });
-    }
+    let streak = await getOrCreateStreak(userId);
 
     const now = new Date();
     const startOfDay = new Date(now);
@@ -58,25 +44,20 @@ export const getStreak = async (req: Request, res: Response) => {
 
     // Check actual activity today (mood or explicit check-in)
     const [todayMood, todayActivity] = await Promise.all([
-      Mood.findOne({ userId, timestamp: { $gte: startOfDay, $lte: endOfDay } }),
-      Activity.findOne({ userId, timestamp: { $gte: startOfDay, $lte: endOfDay } }),
+      findMoodInRange(userId, startOfDay, endOfDay),
+      findActivityInRange(userId, startOfDay, endOfDay),
     ]);
     const checkedInToday =
       !!(todayMood || todayActivity) ||
       (streak.lastCheckInDate ? isSameDay(streak.lastCheckInDate, now) : false);
 
-    // Streak broken: last check-in is older than yesterday — reset atomically
-    // Use findOneAndUpdate to avoid race condition between read and write
+    // Streak broken: last check-in is older than yesterday : reset atomically
     if (
       streak.lastCheckInDate &&
       !isSameDay(streak.lastCheckInDate, now) &&
       !isYesterday(streak.lastCheckInDate, now)
     ) {
-      streak = await Streak.findOneAndUpdate(
-        { userId },
-        { $set: { currentStreak: 0 } },
-        { new: true }
-      ) ?? streak;
+      streak = await resetCurrentStreak(userId);
     }
 
     res.json({
@@ -90,32 +71,25 @@ export const getStreak = async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    logger.error("Error fetching streak:", error);
-    res.status(500).json({ message: "Error fetching streak" });
+    next(error);
   }
 };
 
 // POST /api/streak/checkin
-export const recordCheckIn = async (req: Request, res: Response) => {
+export const recordCheckIn = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const userId = getUserId(req);
+    const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    // Normalise "today" to start-of-day for consistent date comparisons
     const today = new Date();
 
-    let streak = await Streak.findOne({ userId });
-    if (!streak) {
-      streak = await Streak.create({
-        userId,
-        currentStreak: 0,
-        longestStreak: 0,
-        lastCheckInDate: null,
-        totalCheckIns: 0,
-      });
-    }
+    const streak = await getOrCreateStreak(userId);
 
-    // Already checked in today — return current state without mutation
+    // Already checked in today : return current state without mutation
     if (streak.lastCheckInDate && isSameDay(streak.lastCheckInDate, today)) {
       return res.json({
         success: true,
@@ -139,23 +113,7 @@ export const recordCheckIn = async (req: Request, res: Response) => {
 
     const newLongest = Math.max(streak.longestStreak, newStreak);
 
-    // Atomic update — avoids race conditions between concurrent requests
-    const updated = await Streak.findOneAndUpdate(
-      { userId },
-      {
-        $set: {
-          currentStreak: newStreak,
-          longestStreak: newLongest,
-          lastCheckInDate: today,
-        },
-        $inc: { totalCheckIns: 1 },
-      },
-      { new: true }
-    );
-
-    if (!updated) {
-      return res.status(500).json({ message: "Failed to update streak" });
-    }
+    const updated = await recordCheckInRow(userId, newStreak, newLongest, today);
 
     logger.info(`Streak updated for user ${userId}: ${updated.currentStreak} days`);
 
@@ -171,7 +129,6 @@ export const recordCheckIn = async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    logger.error("Error recording check-in:", error);
-    res.status(500).json({ message: "Error recording check-in" });
+    next(error);
   }
 };

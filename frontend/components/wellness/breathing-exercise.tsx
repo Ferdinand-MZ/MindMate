@@ -21,7 +21,7 @@ const EXERCISES: Record<
 > = {
   box: {
     name: "Box Breathing",
-    description: "4 detik tiap fase — teknik Navy SEAL untuk ketenangan instan",
+    description: "4 detik tiap fase : teknik Navy SEAL untuk ketenangan instan",
     cycles: 4,
     phases: [
       { label: "Hirup", duration: 4, color: "#6d28d9", scale: 1.4 },
@@ -177,7 +177,7 @@ export function BreathingExercise() {
   return (
     <Card className="border-primary/10 overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-sky-500/5 via-cyan-500/5 to-transparent pointer-events-none z-0" />
-      <CardContent className="p-6 relative z-10">
+      <CardContent className="p-6 relative z-10 select-none">
         <button
           className="w-full flex items-start justify-between gap-3 text-left"
           onClick={() => !running && setExpanded(!expanded)}

@@ -6,7 +6,7 @@ interface InsightEntry {
 }
 
 interface Insight {
-  _id: string;
+  id: string;
   userId: string;
   name: string;
   description: string;

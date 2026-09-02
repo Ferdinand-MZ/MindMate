@@ -6,13 +6,13 @@ const router = express.Router();
 
 router.use(auth);
 
-// POST /api/mood — log a mood entry
+// POST /api/mood : log a mood entry
 router.post("/", createMood);
 
-// GET /api/mood — fetch mood history (supports ?limit=N)
+// GET /api/mood : fetch mood history (supports ?limit=N)
 router.get("/", getMoodHistory);
 
-// GET /api/mood/today — fetch today's moods
+// GET /api/mood/today : fetch today's moods
 router.get("/today", getTodayMoods);
 
 export default router;

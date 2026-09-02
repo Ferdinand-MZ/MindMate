@@ -2,10 +2,10 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
-import dotenv from "dotenv";
 import { serve } from "inngest/express";
 import { errorHandler } from "./middleware/errorHandler";
 import { logger } from "./utils/logger";
+import { env } from "./config/env";
 import authRouter from "./routes/auth";
 import chatRouter from "./routes/chat";
 import moodRouter from "./routes/mood";
@@ -20,24 +20,17 @@ import { connectDB } from "./utils/db";
 import { inngest } from "./inngest/client";
 import { functions as inngestFunctions } from "./inngest/functions";
 
-// Load environment variables
-dotenv.config();
-
 const app = express();
 
 // ── Security middleware ────────────────────────────────────────────────────────
 app.use(helmet());
 
-// ── CORS — allow frontend origin ──────────────────────────────────────────────
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000")
-  .split(",")
-  .map((s) => s.trim());
-
+// ── CORS : allow frontend origin ──────────────────────────────────────────────
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, curl, Postman)
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || env.allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error(`CORS blocked origin: ${origin}`));
@@ -84,7 +77,7 @@ app.use(errorHandler);
 const startServer = async () => {
   try {
     await connectDB();
-    const PORT = process.env.PORT || 3001;
+    const PORT = env.port;
     app.listen(PORT, () => {
       logger.info(`MindMate server running on port ${PORT}`);
       logger.info(`Inngest endpoint: http://localhost:${PORT}/api/inngest`);

@@ -1,5 +1,22 @@
 import { inngest } from "./client";
 import { functions as aiFunctions } from "./aiFunctions";
+import { deleteExpiredSessions } from "../models/Session";
+import { logger } from "../utils/logger";
+
+// Postgres has no equivalent to Mongo's TTL index, so expired session rows
+// need explicit periodic cleanup : runs hourly via Inngest's cron trigger.
+export const cleanupExpiredSessionsHandler = inngest.createFunction(
+  { id: "cleanup-expired-sessions" },
+  { cron: "0 * * * *" },
+  async ({ step }) => {
+    const deleted = await step.run("delete-expired-sessions", async () => {
+      const count = await deleteExpiredSessions();
+      logger.info(`Cleaned up ${count} expired session(s)`);
+      return count;
+    });
+    return { deleted };
+  }
+);
 
 // Function to handle therapy session events
 export const therapySessionHandler = inngest.createFunction(
@@ -111,5 +128,6 @@ export const functions = [
   therapySessionHandler,
   moodTrackingHandler,
   activityCompletionHandler,
+  cleanupExpiredSessionsHandler,
   ...aiFunctions,
 ];

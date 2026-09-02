@@ -1,27 +1,22 @@
-import { Request, Response } from "express";
-import { Journal } from "../models/Journal";
-import { Mood } from "../models/Mood";
-import { ChatSession } from "../models/ChatSession";
+import { Request, Response, NextFunction } from "express";
+import {
+  createJournal,
+  findTodayJournal,
+  findJournalByIdAndUser,
+  updateJournalContent,
+  updateJournalAnalysis,
+  getJournalHistory as getJournalHistoryRows,
+} from "../models/Journal";
+import { getMoodsSince } from "../models/Mood";
+import {
+  listRecentChatSessionsByUser,
+  getThemesForSessions,
+} from "../models/ChatSession";
 import { GoogleGenAI } from "@google/genai";
 import { logger } from "../utils/logger";
-import { Types } from "mongoose";
-import dotenv from "dotenv";
+import { env } from "../config/env";
 
-dotenv.config();
-
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-
-function getUserId(req: Request): Types.ObjectId | null {
-  const user = req.user;
-  if (!user) return null;
-  const raw = user.id ?? user._id;
-  if (!raw) return null;
-  try {
-    return new Types.ObjectId(raw.toString());
-  } catch {
-    return null;
-  }
-}
+const genAI = new GoogleGenAI({ apiKey: env.geminiApiKey });
 
 async function geminiGenerate(prompt: string): Promise<string> {
   const result = await genAI.models.generateContent({
@@ -32,41 +27,29 @@ async function geminiGenerate(prompt: string): Promise<string> {
 }
 
 // ─── Generate a daily AI journal prompt ──────────────────────────────────────
-export const getDailyPrompt = async (req: Request, res: Response) => {
+export const getDailyPrompt = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const userId = getUserId(req);
+    const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const recentMoods = await Mood.find({
-      userId,
-      timestamp: { $gte: sevenDaysAgo },
-    })
-      .sort({ timestamp: -1 })
-      .limit(10);
-
-    const recentSessions = await ChatSession.find({ userId })
-      .sort({ startTime: -1 })
-      .limit(3)
-      .select("messages");
-
-    const allThemes: string[] = [];
-    recentSessions.forEach((session) => {
-      session.messages.forEach((msg) => {
-        if (msg.metadata?.analysis?.themes) {
-          allThemes.push(...msg.metadata.analysis.themes);
-        }
-      });
-    });
+    const recentMoods = (await getMoodsSince(userId, sevenDaysAgo)).slice(0, 10);
+    const recentSessions = await listRecentChatSessionsByUser(userId, 3);
+    const uniqueThemes = [
+      ...new Set(await getThemesForSessions(recentSessions.map((s) => s.id))),
+    ].slice(0, 5);
 
     const avgMood =
       recentMoods.length > 0
         ? recentMoods.reduce((sum, m) => sum + m.score, 0) / recentMoods.length
         : null;
 
-    const uniqueThemes = [...new Set(allThemes)].slice(0, 5);
     const moodLabel =
       avgMood === null
         ? "neutral"
@@ -78,23 +61,20 @@ export const getDailyPrompt = async (req: Request, res: Response) => {
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const existingToday = await Journal.findOne({
-      userId,
-      createdAt: { $gte: todayStart },
-    });
+    const existingToday = await findTodayJournal(userId, todayStart);
 
     if (existingToday) {
       return res.json({
         success: true,
         prompt: existingToday.prompt,
-        journalId: existingToday._id,
+        journalId: existingToday.id,
         hasEntry: !!existingToday.content,
         isExisting: true,
       });
     }
 
     const aiPrompt = `You are MindMate, a compassionate AI for teenagers and college students.
-    
+
 Generate ONE thoughtful, specific journal prompt for today based on this context:
 - User's average mood this week: ${moodLabel} (score: ${avgMood?.toFixed(0) ?? "unknown"}/100)
 - Recent themes in their conversations: ${uniqueThemes.length > 0 ? uniqueThemes.join(", ") : "general wellbeing"}
@@ -104,43 +84,43 @@ Rules:
 - It should gently relate to their recent emotional state
 - Keep it to 1-2 sentences maximum
 - Write in Indonesian (Bahasa Indonesia)
-- Do NOT include any intro like "Here's a prompt:" — just output the prompt itself
+- Do NOT include any intro like "Here's a prompt:" : just output the prompt itself
 - Make it specific, not generic (e.g., not just "How are you feeling?")
 
 Example prompts for different states:
-- Stressed: "Ceritakan satu momen kecil minggu ini yang terasa lebih baik dari yang kamu bayangkan — seberapa pun kecilnya."
+- Stressed: "Ceritakan satu momen kecil minggu ini yang terasa lebih baik dari yang kamu bayangkan : seberapa pun kecilnya."
 - Sad: "Jika perasaanmu saat ini bisa berbicara, apa yang ingin ia katakan padamu?"
 - Positive: "Apa satu hal yang kamu lakukan untuk dirimu sendiri minggu ini yang ingin kamu ulangi?"`;
 
     const prompt = await geminiGenerate(aiPrompt);
 
-    const journal = new Journal({
+    const journal = await createJournal({
       userId,
       prompt,
-      content: "",
       themes: uniqueThemes,
       aiPromptContext: moodLabel,
     });
 
-    await journal.save();
-
     res.json({
       success: true,
       prompt,
-      journalId: journal._id,
+      journalId: journal.id,
       hasEntry: false,
       isExisting: false,
     });
   } catch (error) {
-    logger.error("Error generating journal prompt:", error);
-    res.status(500).json({ message: "Error generating prompt" });
+    next(error);
   }
 };
 
 // ─── Save journal entry content ──────────────────────────────────────────────
-export const saveJournalEntry = async (req: Request, res: Response) => {
+export const saveJournalEntry = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const userId = getUserId(req);
+    const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const { journalId, content } = req.body;
@@ -148,44 +128,44 @@ export const saveJournalEntry = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Content is required" });
     }
 
-    const journal = await Journal.findOne({ _id: journalId, userId });
+    const journal = await findJournalByIdAndUser(journalId, userId);
     if (!journal) {
       return res.status(404).json({ message: "Journal entry not found" });
     }
 
-    journal.content = content.trim();
-    await journal.save();
-
-    res.json({ success: true, data: journal });
+    const updated = await updateJournalContent(journal.id, content.trim());
+    res.json({ success: true, data: updated });
   } catch (error) {
-    logger.error("Error saving journal entry:", error);
-    res.status(500).json({ message: "Error saving entry" });
+    next(error);
   }
 };
 
 // ─── Get journal history ──────────────────────────────────────────────────────
-export const getJournalHistory = async (req: Request, res: Response) => {
+export const getJournalHistory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const userId = getUserId(req);
+    const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const limit = parseInt(req.query.limit as string) || 20;
-    const journals = await Journal.find({ userId, content: { $ne: "" } })
-      .sort({ createdAt: -1 })
-      .limit(Math.min(limit, 50))
-      .select("-__v");
-
+    const journals = await getJournalHistoryRows(userId, Math.min(limit, 50));
     res.json({ success: true, data: journals });
   } catch (error) {
-    logger.error("Error fetching journal history:", error);
-    res.status(500).json({ message: "Error fetching journals" });
+    next(error);
   }
 };
 
 // ─── Analyze journal entry with AI (opt-in) ───────────────────────────────────
-export const analyzeJournalEntry = async (req: Request, res: Response) => {
+export const analyzeJournalEntry = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const userId = getUserId(req);
+    const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const { journalId } = req.body;
@@ -193,7 +173,7 @@ export const analyzeJournalEntry = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "journalId is required" });
     }
 
-    const journal = await Journal.findOne({ _id: journalId, userId });
+    const journal = await findJournalByIdAndUser(journalId, userId);
     if (!journal) {
       return res.status(404).json({ message: "Journal entry not found" });
     }
@@ -219,13 +199,13 @@ Respond with this exact JSON structure:
   "mood": "satu kata emosi dominan dalam bahasa Indonesia (misal: tenang, cemas, bersyukur, sedih, semangat)",
   "moodEmoji": "satu emoji yang cocok dengan mood",
   "themes": ["tema1", "tema2"],
-  "insight": "2-3 kalimat hangat dan empatik tentang apa yang terlihat dari tulisan ini — bukan saran, tapi refleksi",
+  "insight": "2-3 kalimat hangat dan empatik tentang apa yang terlihat dari tulisan ini : bukan saran, tapi refleksi",
   "affirmation": "satu kalimat afirmasi singkat yang personal dan menyentuh, langsung ditujukan ke penulis"
 }
 
 Rules:
 - themes: 2-3 kata kunci (dalam bahasa Indonesia, misal: "kelelahan", "hubungan", "ekspektasi diri")
-- insight: hangat, seperti teman yang mengerti — bukan terapis. Jangan menyarankan sesuatu
+- insight: hangat, seperti teman yang mengerti : bukan terapis. Jangan menyarankan sesuatu
 - affirmation: pendek, kuat, personal berdasarkan isi tulisan
 - Semua teks dalam bahasa Indonesia
 - Output HANYA JSON mentah, tanpa \`\`\`json atau penjelasan apapun`;
@@ -241,7 +221,6 @@ Rules:
     };
 
     try {
-      // Strip any accidental markdown fences
       const cleaned = raw.replace(/```json|```/g, "").trim();
       analysis = JSON.parse(cleaned);
     } catch {
@@ -249,13 +228,9 @@ Rules:
       return res.status(500).json({ message: "Failed to parse AI analysis" });
     }
 
-    // Cache analysis on the journal document
-    journal.aiAnalysis = analysis;
-    await journal.save();
-
+    await updateJournalAnalysis(journal.id, analysis);
     res.json({ success: true, analysis });
   } catch (error) {
-    logger.error("Error analyzing journal entry:", error);
-    res.status(500).json({ message: "Error analyzing entry" });
+    next(error);
   }
 };

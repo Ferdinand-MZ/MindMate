@@ -5,14 +5,14 @@
 
 [![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org)
 [![Express](https://img.shields.io/badge/Express-4-green?logo=express)](https://expressjs.com)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-brightgreen?logo=mongodb)](https://mongodb.com)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?logo=postgresql)](https://postgresql.org)
 [![Gemini](https://img.shields.io/badge/AI-Gemini_2.5_Flash-blue?logo=google)](https://deepmind.google/gemini)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://typescriptlang.org)
 
 
 ## Tentang MindMate
 
-MindMate adalah aplikasi web kesehatan mental yang dirancang khusus untuk remaja dan mahasiswa Indonesia. Dibangun dengan pendekatan empati-pertama — bukan platform terapi klinis, melainkan teman digital yang mendengarkan, membantu refleksi diri, dan mendorong kebiasaan positif secara konsisten.
+MindMate adalah aplikasi web kesehatan mental yang dirancang khusus untuk remaja dan mahasiswa Indonesia. Dibangun dengan pendekatan empati-pertama : bukan platform terapi klinis, melainkan teman digital yang mendengarkan, membantu refleksi diri, dan mendorong kebiasaan positif secara konsisten.
 
 **Prinsip utama:**
 - Privasi adalah default, bukan opsi
@@ -56,7 +56,7 @@ MindMate adalah aplikasi web kesehatan mental yang dirancang khusus untuk remaja
 ### Backend (`/backend`)
 - **Runtime:** Node.js + Express 4
 - **Language:** TypeScript
-- **Database:** MongoDB (Mongoose)
+- **Database:** PostgreSQL (raw `pg`, no ORM)
 - **AI:** Google Gemini 2.5 Flash (`@google/genai`)
 - **Background jobs:** Inngest
 - **Security:** Helmet, bcryptjs, JWT, CORS whitelist
@@ -93,7 +93,7 @@ mindmate/
 │   │   ├── auth-cookie.ts      # Cookie sync helper (middleware ↔ client)
 │   │   └── contexts/
 │   │       └── session-context.tsx
-│   └── middleware.ts            # Edge middleware — route protection
+│   └── middleware.ts            # Edge middleware : route protection
 │
 └── backend/                    # Express API server
     └── src/
@@ -106,7 +106,7 @@ mindmate/
         │   ├── moodPatternController.ts
         │   ├── progressController.ts
         │   └── streakController.ts
-        ├── models/             # Mongoose schemas
+        ├── models/             # SQL query modules (parameterized pg queries)
         │   ├── User.ts
         │   ├── ChatSession.ts
         │   ├── Journal.ts
@@ -117,7 +117,12 @@ mindmate/
         ├── routes/             # Express routers
         ├── middleware/         # auth.ts, errorHandler.ts
         ├── inngest/            # Background AI jobs
-        └── utils/              # db.ts, logger.ts
+        ├── config/             # env.ts : fail-closed env var validation
+        ├── db/                 # migrate.ts : applies db/schema.sql
+        └── utils/              # db.ts (pg Pool), logger.ts
+
+    db/
+    └── schema.sql              # Postgres schema (tables, indexes, triggers)
 ```
 
 ---
@@ -128,7 +133,7 @@ mindmate/
 
 - Node.js ≥ 18
 - pnpm ≥ 8
-- MongoDB Atlas account (atau instance lokal)
+- Docker (untuk PostgreSQL lokal) : atau instance Postgres lain (Supabase/RDS/Neon)
 - Google AI API key (Gemini)
 
 ### 1. Clone & Install
@@ -146,11 +151,11 @@ cd ../backend && pnpm install
 
 ### 2. Environment Variables
 
-**Backend** — buat file `backend/.env`:
+**Backend** : buat file `backend/.env`:
 
 ```env
 PORT=3001
-MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/mindmate
+DATABASE_URL=postgresql://mindmate:mindmate@localhost:5432/mindmate
 JWT_SECRET=your-super-secret-jwt-key
 GEMINI_API_KEY=your-gemini-api-key
 ANON_SECRET=random-string-for-anon-hashing
@@ -159,20 +164,33 @@ INNGEST_EVENT_KEY=your-inngest-event-key
 INNGEST_SIGNING_KEY=your-inngest-signing-key
 ```
 
-**Frontend** — buat file `frontend/.env.local`:
+**Frontend** : buat file `frontend/.env.local`:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:3001
 ```
 
-### 3. Jalankan Development Server
+### 3. Start PostgreSQL
 
 ```bash
-# Terminal 1 — Backend
+cd backend
+docker compose up -d   # starts Postgres and auto-applies db/schema.sql
+```
+
+Sudah punya Postgres sendiri (Supabase/RDS/Neon)? Skip Docker dan jalankan migrasi manual:
+
+```bash
+pnpm db:migrate
+```
+
+### 4. Jalankan Development Server
+
+```bash
+# Terminal 1 : Backend
 cd backend
 pnpm dev
 
-# Terminal 2 — Frontend
+# Terminal 2 : Frontend
 cd frontend
 pnpm dev
 ```
@@ -187,7 +205,7 @@ Akses di `http://localhost:3000`
 
 | Variable | Wajib | Deskripsi |
 |---|---|---|
-| `MONGODB_URI` | ✅ | MongoDB connection string |
+| `DATABASE_URL` | ✅ | PostgreSQL connection string |
 | `JWT_SECRET` | ✅ | Secret key untuk signing JWT |
 | `GEMINI_API_KEY` | ✅ | Google AI Studio API key |
 | `ANON_SECRET` | ✅ | Salt untuk hashing anonymous ID komunitas |
@@ -209,20 +227,20 @@ Akses di `http://localhost:3000`
 ### Proteksi Rute (Auth Guard)
 Halaman `/wellness`, `/journal`, `/community`, dan `/dashboard` dilindungi dua lapis:
 
-1. **Edge Middleware** (`middleware.ts`) — cek cookie `token` sebelum halaman dirender. Redirect ke `/login?redirect=<tujuan>` jika belum login.
-2. **Client guard** — `useSession()` hook sebagai lapisan kedua di setiap halaman protected.
+1. **Edge Middleware** (`middleware.ts`) : cek cookie `token` sebelum halaman dirender. Redirect ke `/login?redirect=<tujuan>` jika belum login.
+2. **Client guard** : `useSession()` hook sebagai lapisan kedua di setiap halaman protected.
 
 Token JWT disimpan di `localStorage` (untuk API calls) dan disinkronkan ke cookie `SameSite=Lax` (untuk middleware). Cookie di-clear saat logout.
 
-### Komunitas — Anonimitas & Keamanan Konten
-- Tidak ada `userId` yang tersimpan di dokumen post — hanya `anonId` (HMAC-SHA256 dari userId, satu arah)
+### Komunitas : Anonimitas & Keamanan Konten
+- Tidak ada `userId` yang tersimpan di dokumen post : hanya `anonId` (HMAC-SHA256 dari userId, satu arah)
 - Filter regex untuk konten krisis/self-harm → return pesan redirect ke 119 ext 8
 - Rate limit: maksimal 5 postingan per hari per user
-- Tidak ada fitur komentar — hanya 5 tipe reaksi emoji
+- Tidak ada fitur komentar : hanya 5 tipe reaksi emoji
 
 ### AI Journal Analysis
 - Opt-in: user harus klik tombol "Analisa dengan AI" secara eksplisit
-- Hasil analisa di-cache di database — Gemini tidak dipanggil dua kali untuk entri yang sama
+- Hasil analisa di-cache di database : Gemini tidak dipanggil dua kali untuk entri yang sama
 - Prompt dirancang untuk menghasilkan refleksi empatik, bukan diagnosis atau saran klinis
 
 ---
@@ -288,4 +306,4 @@ POST   /api/insight
 
 ## Lisensi
 
-MIT License — lihat [LICENSE](./LICENSE) untuk detail.
+MIT License : lihat [LICENSE](./LICENSE) untuk detail.

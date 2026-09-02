@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND = process.env.BACKEND_API_URL || "http://localhost:3001";
 
-// GET /api/chat/sessions/:sessionId — fetch chat history
+// GET /api/chat/sessions/:sessionId : fetch chat history
 export async function GET(
   req: NextRequest,
   { params }: { params: { sessionId: string } }
@@ -31,7 +31,7 @@ export async function GET(
   }
 }
 
-// POST /api/chat/sessions/:sessionId — send a message
+// POST /api/chat/sessions/:sessionId : send a message
 export async function POST(
   req: NextRequest,
   { params }: { params: { sessionId: string } }

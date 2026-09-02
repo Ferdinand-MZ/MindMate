@@ -29,7 +29,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface JournalEntry {
-  _id: string;
+  id: string;
   prompt: string;
   content: string;
   createdAt: string;
@@ -208,7 +208,7 @@ function AIAnalysisPanel({
           <div className="flex-1">
             <p className="text-sm font-medium mb-0.5">Mau dapat insight dari AI?</p>
             <p className="text-xs text-muted-foreground mb-3">
-              MindMate akan membaca jurnalmu dan memberikan refleksi singkat — bukan saran, tapi cerminan hangat.
+              MindMate akan membaca jurnalmu dan memberikan refleksi singkat : bukan saran, tapi cerminan hangat.
             </p>
             <Button
               size="sm"
@@ -315,7 +315,7 @@ function EntryReader({
   const handleSave = async () => {
     setSaving(true);
     try {
-      await saveJournalEntry(entry._id, draft);
+      await saveJournalEntry(entry.id, draft);
       onUpdate({ ...entry, content: draft });
       setEditing(false);
     } catch {
@@ -390,10 +390,10 @@ function EntryReader({
         </div>
       )}
 
-      {/* AI analysis — only show if entry has content and not editing */}
+      {/* AI analysis : only show if entry has content and not editing */}
       {!editing && entry.content && (
         <AIAnalysisPanel
-          journalId={entry._id}
+          journalId={entry.id}
           existingAnalysis={entry.aiAnalysis}
           onAnalysisDone={(analysis) => onUpdate({ ...entry, aiAnalysis: analysis })}
         />
@@ -542,14 +542,14 @@ export default function JournalPage() {
   };
 
   const handleEntryUpdate = (updated: JournalEntry) => {
-    setEntries((prev) => prev.map((e) => (e._id === updated._id ? updated : e)));
+    setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
     setSelectedEntry(updated);
   };
 
   const handleTodaySaved = (entry: JournalEntry) => {
     setEntries((prev) => {
-      const exists = prev.find((e) => e._id === entry._id);
-      return exists ? prev.map((e) => (e._id === entry._id ? entry : e)) : [entry, ...prev];
+      const exists = prev.find((e) => e.id === entry.id);
+      return exists ? prev.map((e) => (e.id === entry.id ? entry : e)) : [entry, ...prev];
     });
     setToday((prev) => prev ? { ...prev, hasEntry: true } : prev);
   };
@@ -632,10 +632,10 @@ export default function JournalPage() {
                       <div className="divide-y divide-primary/10 max-h-64 overflow-y-auto">
                         {entries.slice(0, 10).map((entry) => {
                           const d = new Date(entry.createdAt);
-                          const isSelected = selectedEntry?._id === entry._id;
+                          const isSelected = selectedEntry?.id === entry.id;
                           return (
                             <button
-                              key={entry._id}
+                              key={entry.id}
                               onClick={() => { setSelectedEntry(entry); setViewingToday(false); setSelectedDate(d); }}
                               className={`
                                 w-full text-left px-4 py-3 transition-colors

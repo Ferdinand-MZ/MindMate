@@ -243,7 +243,7 @@ export function CBTQuiz({
   };
 
   const handleSubmit = async () => {
-    if (!user?._id) {
+    if (!user?.id) {
       toast({
         title: "Error",
         description: "User tidak terautentikasi",
@@ -269,7 +269,7 @@ export function CBTQuiz({
 
     try {
       const insightData: InsightEntry = {
-        userId: user._id,
+        userId: user.id,
         name: topResult.name,
         description: insightDescriptions[topResult.name] || "Tidak ada deskripsi tersedia",
         symptoms: topResult.symptoms.filter((s) => insightSymptoms[topResult.name].includes(s)),

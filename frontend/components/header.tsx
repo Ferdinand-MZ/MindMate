@@ -22,7 +22,6 @@ const PUBLIC_NAV = [
 
 // Nav items only visible after login
 const PROTECTED_NAV = [
-  { href: "/wellness",   label: "Wellness" },
   { href: "/journal",    label: "Jurnal" },
   { href: "/community",  label: "Komunitas" },
 ];

@@ -1,36 +1,22 @@
 // src/controllers/chat.ts
-import { Request, Response } from "express";
-import { ChatSession } from "../models/ChatSession";
+import { Request, Response, NextFunction } from "express";
+import {
+  createChatSession as createChatSessionRow,
+  findChatSessionByIdAndUser,
+  listChatMessages,
+  addChatMessage,
+  listChatSessionsByUser,
+  deleteChatSession as deleteChatSessionRow,
+} from "../models/ChatSession";
+import { findUserById } from "../models/User";
 import { GoogleGenAI } from "@google/genai";
-import { v4 as uuidv4 } from "uuid";
 import { logger } from "../utils/logger";
 import { inngest } from "../inngest/client";
-import { User } from "../models/User";
 import { InngestEvent } from "../types/inngest";
-import { Types } from "mongoose";
 import axios from "axios";
-import dotenv from "dotenv";
+import { env } from "../config/env";
 
-dotenv.config();
-
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error("GEMINI_API_KEY is not defined in .env");
-}
-
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-
-// ─── Helper: get user id as string robustly from req.user ─────────────────────
-function getUserId(req: Request): Types.ObjectId | null {
-  const user = req.user;
-  if (!user) return null;
-  const raw = user.id ?? user._id;
-  if (!raw) return null;
-  try {
-    return new Types.ObjectId(raw.toString());
-  } catch {
-    return null;
-  }
-}
+const genAI = new GoogleGenAI({ apiKey: env.geminiApiKey });
 
 // ─── Helper: call Gemini with exponential back-off on 429 ─────────────────────
 async function geminiGenerate(prompt: string, retries = 3, delayMs = 1500): Promise<string> {
@@ -65,7 +51,6 @@ function safeParseJSON<T>(text: string, fallback: T): T {
     .replace(/```json\s*/gi, "")
     .replace(/```\s*/g, "")
     .trim();
-  // Extract first { ... } block
   const match = clean.match(/\{[\s\S]*\}/);
   if (!match) return fallback;
   try {
@@ -86,7 +71,7 @@ Your role:
 - Gently identify academic stress, social pressure, identity issues, burnout, or anxiety
 - Encourage professional help when risk indicators are present (self-harm, suicidal ideation)
 - ALWAYS respond in the same language the user writes in (Bahasa Indonesia or English)
-- Keep responses conversational and supportive — not lecture-y
+- Keep responses conversational and supportive : not lecture-y
 
 Safety rules:
 - If riskLevel >= 7: immediately encourage the user to reach out to a trusted adult, counselor, or crisis line (Indonesia: 119 ext 8)
@@ -94,44 +79,40 @@ Safety rules:
 - Maintain confidentiality framing`;
 
 // ─── Create a new chat session ─────────────────────────────────────────────────
-export const createChatSession = async (req: Request, res: Response) => {
+export const createChatSession = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const userId = getUserId(req);
+    const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized - User not authenticated" });
     }
-    const user = await User.findById(userId);
+    const user = await findUserById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    const sessionId = uuidv4();
-    const session = new ChatSession({
-      sessionId,
-      userId,
-      startTime: new Date(),
-      status: "active",
-      messages: [],
-    });
-    await session.save();
+    const session = await createChatSessionRow(userId);
     res.status(201).json({
       message: "Chat session created successfully",
-      sessionId: session.sessionId,
+      sessionId: session.id,
     });
   } catch (error) {
-    logger.error("Error creating chat session:", error);
-    res.status(500).json({
-      message: "Error creating chat session",
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
+    next(error);
   }
 };
 
 // ─── Send a message ───────────────────────────────────────────────────────────
-export const sendMessage = async (req: Request, res: Response) => {
+export const sendMessage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { sessionId } = req.params;
     const { message } = req.body;
-    const userId = getUserId(req);
+    const userId = req.user?.id;
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -142,19 +123,17 @@ export const sendMessage = async (req: Request, res: Response) => {
 
     logger.info("Processing message:", { sessionId, message });
 
-    const session = await ChatSession.findOne({ sessionId });
+    const session = await findChatSessionByIdAndUser(sessionId, userId);
     if (!session) {
       return res.status(404).json({ message: "Session not found" });
     }
 
-    if (session.userId.toString() !== userId.toString()) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
+    const priorMessages = await listChatMessages(sessionId);
 
     // ── Fetch weather data (non-blocking) ────────────────────────────────────
     let weatherContext = "";
     try {
-      const apiKey = process.env.OPENWEATHERMAP_API_KEY;
+      const apiKey = env.openWeatherMapApiKey;
       if (apiKey) {
         const city = "Jakarta";
         const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric`;
@@ -163,16 +142,18 @@ export const sendMessage = async (req: Request, res: Response) => {
         weatherContext = `Current weather in ${city}: ${wd.weather[0].description}, ${wd.main.temp}°C.`;
       }
     } catch {
-      // Weather is a nice-to-have; don't block the chat
       weatherContext = "";
     }
 
-    // ── Send Inngest event (non-blocking, fire-and-forget) ────────────────────
+    // ── Fire-and-forget event log (kept purely for observability : the
+    //    duplicate synchronous Gemini call this used to trigger via
+    //    aiFunctions.processChatMessage has been removed; its result was
+    //    discarded and it doubled AI cost/latency per message) ──────────────
     const event: InngestEvent = {
       name: "therapy/session.message",
       data: {
         message,
-        history: session.messages,
+        history: priorMessages,
         memory: {
           userProfile: { emotionalState: [], riskLevel: 0, preferences: {} },
           sessionContext: { conversationThemes: [], currentTechnique: null },
@@ -184,7 +165,7 @@ export const sendMessage = async (req: Request, res: Response) => {
     inngest.send(event).catch((e) => logger.warn("Inngest send failed:", e));
 
     // ── Build conversation history context for Gemini ─────────────────────────
-    const recentHistory = session.messages
+    const recentHistory = priorMessages
       .slice(-10)
       .map((m) => `${m.role === "user" ? "User" : "MindMate"}: ${m.content}`)
       .join("\n");
@@ -273,27 +254,17 @@ Respond naturally and helpfully as MindMate. Be warm, concise (2-4 paragraphs ma
     const finalResponse = crisisPrefix + aiResponse;
 
     // ── Persist messages ──────────────────────────────────────────────────────
-    session.messages.push({
-      role: "user",
-      content: message,
-      timestamp: new Date(),
-    });
-
-    session.messages.push({
-      role: "assistant",
-      content: finalResponse,
-      timestamp: new Date(),
-      metadata: {
-        analysis,
-        progress: {
-          emotionalState: analysis.emotionalState,
-          riskLevel: analysis.riskLevel,
-          weatherInfluence: analysis.weatherInfluence || "none",
-        },
+    // Insert-only into chat_messages, rather than rewriting a growing
+    // embedded array on every message.
+    await addChatMessage(sessionId, "user", message);
+    await addChatMessage(sessionId, "assistant", finalResponse, {
+      analysis,
+      progress: {
+        emotionalState: analysis.emotionalState,
+        riskLevel: analysis.riskLevel,
+        weatherInfluence: analysis.weatherInfluence || "none",
       },
     });
-
-    await session.save();
     logger.info("Session updated:", { sessionId });
 
     res.json({
@@ -309,90 +280,91 @@ Respond naturally and helpfully as MindMate. Be warm, concise (2-4 paragraphs ma
       },
     });
   } catch (error) {
-    logger.error("Error in sendMessage:", error);
-    res.status(500).json({
-      message: "Error processing message",
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
+    next(error);
   }
 };
 
 // ─── Get specific chat session ─────────────────────────────────────────────────
-export const getChatSession = async (req: Request, res: Response) => {
+export const getChatSession = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { sessionId } = req.params;
-    const chatSession = await ChatSession.findOne({ sessionId });
-    if (!chatSession) {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    // Ownership enforced in the query itself : fixes the IDOR where this
+    // endpoint previously returned any user's session given its id.
+    const session = await findChatSessionByIdAndUser(sessionId, userId);
+    if (!session) {
       return res.status(404).json({ error: "Chat session not found" });
     }
-    res.json(chatSession);
+    const messages = await listChatMessages(sessionId);
+    res.json({ ...session, messages });
   } catch (error) {
-    logger.error("Failed to get chat session:", error);
-    res.status(500).json({ error: "Failed to get chat session" });
+    next(error);
   }
 };
 
 // ─── Get chat history ──────────────────────────────────────────────────────────
-export const getChatHistory = async (req: Request, res: Response) => {
+export const getChatHistory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { sessionId } = req.params;
-    const userId = getUserId(req);
+    const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const session = await ChatSession.findOne({ sessionId });
+    const session = await findChatSessionByIdAndUser(sessionId, userId);
     if (!session) return res.status(404).json({ message: "Session not found" });
 
-    if (session.userId.toString() !== userId.toString()) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
-    res.json(session.messages);
+    const messages = await listChatMessages(sessionId);
+    res.json(messages);
   } catch (error) {
-    logger.error("Error fetching chat history:", error);
-    res.status(500).json({ message: "Error fetching chat history" });
+    next(error);
   }
 };
 
 // ─── Get all sessions ──────────────────────────────────────────────────────────
-export const getAllChatSessions = async (req: Request, res: Response) => {
+export const getAllChatSessions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const userId = getUserId(req);
+    const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const sessions = await ChatSession.find({ userId })
-      .select("sessionId startTime status messages createdAt updatedAt")
-      .sort({ startTime: -1 });
-
+    const sessions = await listChatSessionsByUser(userId);
     return res.status(200).json(sessions);
   } catch (error) {
-    logger.error("Error fetching chat sessions:", error);
-    return res.status(500).json({ message: "Error fetching chat sessions" });
+    next(error);
   }
 };
 
 // ─── Delete a session ──────────────────────────────────────────────────────────
-export const deleteChatSession = async (req: Request, res: Response) => {
+export const deleteChatSession = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { sessionId } = req.params;
-    const userId = getUserId(req);
+    const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const session = await ChatSession.findOne({ sessionId });
+    const session = await findChatSessionByIdAndUser(sessionId, userId);
     if (!session) {
       return res.status(404).json({ message: "Chat session not found" });
     }
 
-    if (session.userId.toString() !== userId.toString()) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
-    await ChatSession.deleteOne({ sessionId });
+    await deleteChatSessionRow(sessionId);
     res.status(200).json({ message: "Chat session deleted successfully" });
   } catch (error) {
-    logger.error("Error deleting chat session:", error);
-    res.status(500).json({
-      message: "Error deleting chat session",
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
+    next(error);
   }
 };

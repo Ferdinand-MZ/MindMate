@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { Mood } from "../models/Mood";
+import { createMood as createMoodRow, getMoodHistory as getMoodHistoryRows } from "../models/Mood";
+import { getMoodsInRange } from "../models/Mood";
 import { logger } from "../utils/logger";
 import { sendMoodUpdateEvent } from "../utils/inngestEvents";
 
@@ -11,7 +12,7 @@ export const createMood = async (
 ) => {
   try {
     const { score, note, context, activities } = req.body;
-    const userId = req.user?._id ?? req.user?.id;
+    const userId = req.user?.id;
 
     if (!userId) {
       return res.status(401).json({ message: "User not authenticated" });
@@ -21,16 +22,7 @@ export const createMood = async (
       return res.status(400).json({ message: "Score must be a number between 0 and 100" });
     }
 
-    const mood = new Mood({
-      userId,
-      score,
-      note,
-      context,
-      activities,
-      timestamp: new Date(),
-    });
-
-    await mood.save();
+    const mood = await createMoodRow({ userId, score, note, context, activities });
     logger.info(`Mood entry created for user ${userId}`);
 
     await sendMoodUpdateEvent({
@@ -55,16 +47,13 @@ export const getMoodHistory = async (
   next: NextFunction
 ) => {
   try {
-    const userId = req.user?._id ?? req.user?.id;
+    const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ message: "User not authenticated" });
     }
 
     const limit = parseInt(req.query.limit as string) || 30;
-    const moods = await Mood.find({ userId })
-      .sort({ timestamp: -1 })
-      .limit(Math.min(limit, 100));
-
+    const moods = await getMoodHistoryRows(userId, Math.min(limit, 100));
     res.json({ success: true, data: moods });
   } catch (error) {
     next(error);
@@ -78,7 +67,7 @@ export const getTodayMoods = async (
   next: NextFunction
 ) => {
   try {
-    const userId = req.user?._id ?? req.user?.id;
+    const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ message: "User not authenticated" });
     }
@@ -88,11 +77,7 @@ export const getTodayMoods = async (
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    const moods = await Mood.find({
-      userId,
-      timestamp: { $gte: startOfDay, $lte: endOfDay },
-    }).sort({ timestamp: -1 });
-
+    const moods = await getMoodsInRange(userId, startOfDay, endOfDay);
     res.json({ success: true, data: moods });
   } catch (error) {
     next(error);

@@ -56,7 +56,7 @@ export function GuidedJournalPrompt() {
       <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-purple-500/5 to-transparent pointer-events-none z-0" />
       <CardContent className="p-6 relative z-10 flex flex-col h-full">
         {/* Header */}
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex items-start justify-between mb-4 select-none">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-violet-500/10 flex items-center justify-center">
               {journal?.hasEntry ? (

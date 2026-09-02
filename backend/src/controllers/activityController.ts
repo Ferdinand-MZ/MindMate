@@ -1,9 +1,12 @@
 import { Request, Response, NextFunction } from "express";
-import { Activity } from "../models/Activity";
+import {
+  createActivity,
+  getActivitiesInRange,
+  getAllActivities,
+  countActivities,
+} from "../models/Activity";
 import { logger } from "../utils/logger";
 import { sendActivityCompletionEvent } from "../utils/inngestEvents";
-
-const getUID = (req: Request) => req.user?._id ?? req.user?.id;
 
 // Log a new activity
 export const logActivity = async (
@@ -13,7 +16,7 @@ export const logActivity = async (
 ) => {
   try {
     const { type, name, description, duration, difficulty, feedback } = req.body;
-    const userId = getUID(req);
+    const userId = req.user?.id;
 
     if (!userId) {
       return res.status(401).json({ message: "User not authenticated" });
@@ -23,7 +26,7 @@ export const logActivity = async (
       return res.status(400).json({ message: "type and name are required" });
     }
 
-    const activity = new Activity({
+    const activity = await createActivity({
       userId,
       type,
       name,
@@ -31,16 +34,13 @@ export const logActivity = async (
       duration,
       difficulty,
       feedback,
-      timestamp: new Date(),
     });
-
-    await activity.save();
     logger.info(`Activity logged for user ${userId}`);
 
     sendActivityCompletionEvent({
       userId,
-      id: activity._id,
-      type: activity.type, // normalized by model setter
+      id: activity.id,
+      type: activity.type,
       name,
       duration,
       difficulty,
@@ -61,7 +61,7 @@ export const getTodayActivities = async (
   next: NextFunction
 ) => {
   try {
-    const userId = getUID(req);
+    const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ message: "User not authenticated" });
     }
@@ -71,11 +71,7 @@ export const getTodayActivities = async (
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    const activities = await Activity.find({
-      userId,
-      timestamp: { $gte: startOfDay, $lte: endOfDay },
-    }).sort({ timestamp: -1 });
-
+    const activities = await getActivitiesInRange(userId, startOfDay, endOfDay);
     res.json({ success: true, data: activities });
   } catch (error) {
     next(error);
@@ -83,22 +79,19 @@ export const getTodayActivities = async (
 };
 
 // Get all activities for a user
-export const getAllActivities = async (
+export const getAllActivitiesHandler = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const userId = getUID(req);
+    const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ message: "User not authenticated" });
     }
 
     const limit = parseInt(req.query.limit as string) || 50;
-    const activities = await Activity.find({ userId })
-      .sort({ timestamp: -1 })
-      .limit(Math.min(limit, 200));
-
+    const activities = await getAllActivities(userId, Math.min(limit, 200));
     res.json({ success: true, data: activities });
   } catch (error) {
     next(error);
@@ -112,12 +105,12 @@ export const getTotalActivities = async (
   next: NextFunction
 ) => {
   try {
-    const userId = getUID(req);
+    const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ message: "User not authenticated" });
     }
 
-    const totalActivities = await Activity.countDocuments({ userId });
+    const totalActivities = await countActivities(userId);
     res.status(200).json({ totalActivities });
   } catch (error) {
     next(error);
